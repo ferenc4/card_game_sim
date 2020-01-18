@@ -169,9 +169,10 @@ class TexasHoldem:
             starting_hand = self.players[winner]
             print("Player {} won. SH: {} FH: {}".format(winner + 1, starting_hand, full_hand))
             self.player_chips[winner] += self.pot_size / len(winners)
+            analysis_i += 1
         self.betting_rounds = []
 
-    def status(self):
+    def print_status(self):
         print("\n")
         for i in range(0, self.players.__len__()):
             current_player = self.players[i]

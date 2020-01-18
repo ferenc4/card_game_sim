@@ -26,14 +26,14 @@ def main():
     game.flop()
     game.turn()
     game.river()
-    game.status()
+    game.print_status()
     b1 = BettingRound(game.player_chips, 0, game.big_blind, game.players_with_chips())
     b1.bet(20)
     for i in range(0, players - 1):
         b1.call_bet()
     game.betting(b1)
     game.finalise()
-    game.status()
+    game.print_status()
 
 
 main()
