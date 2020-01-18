@@ -30,11 +30,14 @@ class Card:
         self.suit = suit
         self.number = number
 
-    def __repr__(self) -> str:
+    def as_text(self) -> str:
         return "S{}N{}".format(self.suit, self.number)
 
     def __str__(self) -> str:
         return "{} {}".format(SUIT_MAP.get(self.suit), NUMBER_MAP.get(self.number))
+
+    def __repr__(self):
+        return self.__str__()
 
     def __eq__(self, o: object) -> bool:
         return isinstance(o, Card) and self.suit is o.suit and self.number is o.number
