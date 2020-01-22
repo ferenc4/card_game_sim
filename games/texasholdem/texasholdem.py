@@ -196,16 +196,36 @@ class TexasHoldem:
         return players_with_chips
 
 
-def highcard_analysis(sorted_cards: [Card]) -> [Card]:
-    return sorted_cards[:5]
+def highcard_analysis(sorted_cards: [Card], count=5) -> [Card]:
+    return sorted_cards[:count]
 
 
 def one_pair_analysis(sorted_cards: [Card]) -> [Card]:
-    current_card: Card = None
+    return n_of_a_kind(sorted_cards, 2)
+
+
+def three_of_a_kind_analysis(sorted_cards: [Card]) -> [Card]:
+    return n_of_a_kind(sorted_cards, 3)
+
+
+def four_of_a_kind_analysis(sorted_cards: [Card]) -> [Card]:
+    return n_of_a_kind(sorted_cards, 4)
+
+
+def n_of_a_kind(sorted_cards, threshold):
+    current_streak: [Card] = []
     for card in sorted_cards:
-        if current_card and current_card.number is card.number:
-            return [current_card, card]
-        current_card = card
+        if len(current_streak) < threshold:
+            if len(current_streak) is 0 or current_streak[0].number is card.number:
+                current_streak.append(card)
+            else:
+                current_streak = [card]
+        if len(current_streak) is threshold:
+            # exclude the cards in the streak from the high cards
+            filtered = list(filter(lambda a: a.number != current_streak[0].number, sorted_cards))
+            tiebreakers = highcard_analysis(filtered, 5 - threshold)
+            current_streak.extend(tiebreakers)
+            return current_streak
     return None
 
 
@@ -214,6 +234,8 @@ def hand_analysis(hand: [Card], board: [Card]) -> [[Card]]:
     visible.extend(board)
     visible.sort(key=lambda it: (it.number + 13) % 14, reverse=True)
     analysis = [
+        four_of_a_kind_analysis(visible),
+        three_of_a_kind_analysis(visible),
         one_pair_analysis(visible),
         highcard_analysis(visible)
     ]

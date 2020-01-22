@@ -46,6 +46,15 @@ class Card:
         return self.__str__().__hash__()
 
 
+def NumberHashCard(Card):
+    def __init__(card: Card):
+        super.__init__(card.suit, card.number)
+
+    def __hash__(self) -> int:
+        print("this card is {}".format(self.number))
+        return self.number.__hash__()
+
+
 class Deck:
     def __init__(self, seed=1):
         random.seed(seed)
