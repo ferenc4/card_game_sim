@@ -220,6 +220,7 @@ def hand_analysis(hand: [Card], board: [Card]) -> [[Card]]:
     return analysis
 
 
+# assumes hands are sorted in reverse order of winning (high to low)
 def compare_hands(analysis1: [[Card]], analysis2: [[Card]]):
     len1 = len(analysis1)
     len2 = len(analysis2)
@@ -228,8 +229,16 @@ def compare_hands(analysis1: [[Card]], analysis2: [[Card]]):
     for i in range(0, len1):
         hand1 = analysis1[i]
         hand2 = analysis2[i]
-        if hand1 and not hand2:
+        if hand1 and hand2:
+            for card_index in range(0, len(hand1)):
+                card1 = hand1[card_index]
+                card2 = hand2[card_index]
+                if card1.number > card2.number:
+                    return -1
+                elif card1.number < card2.number:
+                    return 1
+        elif hand1:
             return -1
-        if hand2 and not hand1:
+        elif hand2:
             return 1
     return 0

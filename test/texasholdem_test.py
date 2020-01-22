@@ -23,15 +23,13 @@ class TestStringMethods(unittest.TestCase):
         game.print_status()
         game.finalise()
         game.print_status()
-        self.assertGreater(game.player_chips[0], starter_chips)
-        self.assertGreater(game.player_chips[1], starter_chips)
-        self.assertGreater(game.player_chips[2], starter_chips)
-        self.assertGreater(game.player_chips[3], starter_chips)
-        self.assertLess(game.player_chips[4], starter_chips)
-        self.assertLess(game.player_chips[5], starter_chips)
-        self.assertLess(game.player_chips[6], starter_chips)
-        self.assertGreater(game.player_chips[7], starter_chips)
-        self.assertLess(game.player_chips[8], starter_chips)
+        expected_winners = [1]
+        for i in range(0, len(game.player_chips)):
+            chips = game.player_chips[i]
+            if i in expected_winners:
+                self.assertGreater(chips, starter_chips)
+            else:
+                self.assertLess(chips, starter_chips)
 
 
 if __name__ == '__main__':
