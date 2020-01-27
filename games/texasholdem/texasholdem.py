@@ -1,7 +1,6 @@
 __author__ = "Ferenc Fazekas"
 
 from cards.deck import RandomDeck, Card
-from games.texasholdem.hands import HIGH_CARD, ONE_PAIR
 
 
 class BettingRound:
