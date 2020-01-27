@@ -1,6 +1,8 @@
+__author__ = "Ferenc Fazekas"
+
 import unittest
 
-from games.texasholdem.texasholdem import TexasHoldem, BettingRound
+from games.texasholdem.texasholdem import TexasHoldem, BettingRound, RandomDeck
 
 
 class TestStringMethods(unittest.TestCase):
@@ -9,7 +11,7 @@ class TestStringMethods(unittest.TestCase):
 
     # change the seed for a different outcome
     def single_bet_test(self, expected_winners, seed=1, first_player=0, players=8, starter_chips=100):
-        game = TexasHoldem(players, starter_chips=starter_chips, seed=seed)
+        game = TexasHoldem(players, starter_chips=starter_chips, deck=RandomDeck(seed))
         game.deal_hands()
         b1 = BettingRound(game.player_chips, first_player, game.big_blind, game.players_with_chips())
         b1.bet(20)

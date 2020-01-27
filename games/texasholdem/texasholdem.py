@@ -1,4 +1,6 @@
-from cards.deck import Deck, Card
+__author__ = "Ferenc Fazekas"
+
+from cards.deck import RandomDeck, Card
 from games.texasholdem.hands import HIGH_CARD, ONE_PAIR
 
 
@@ -109,10 +111,10 @@ class BettingRound:
 
 
 class TexasHoldem:
-    def __init__(self, player_count: int, starter_chips=100, chip_to_blind_ratio=50, seed=None) -> None:
+    def __init__(self, player_count: int, starter_chips=100, chip_to_blind_ratio=50, deck=RandomDeck()) -> None:
         self.players = [None] * player_count
         self.shared = [None] * 5
-        self.deck = Deck(seed)
+        self.deck = deck
         self.pot_size = 0
         self.player_chips = [starter_chips] * player_count
         self.chip_to_blind_ratio = chip_to_blind_ratio
@@ -172,6 +174,17 @@ class TexasHoldem:
             analysis_i += 1
         self.betting_rounds = []
 
+    def features(self):
+        pass
+        # to track:
+        # p{playerIndex}IsPlaying: Bool
+        # p{playerIndex}IsPlaying: Bool
+        # t[PreFlop, Flop, Turn, River]P{playerIndex}Checked: Bool
+        # t[PreFlop, Flop, Turn, River]P{playerIndex}[Bet, Call, Raise, Re-raise]Amount: int
+        # cardIndex 1-5 + 8(1-2) Other players are none until reveal
+        # p{playerIndex}Card{cardIndex}Suit: Enum
+        # p{playerIndex}Card{cardIndex}Number: Enum
+
     def print_status(self):
         print("\n")
         for i in range(0, self.players.__len__()):
@@ -196,25 +209,55 @@ class TexasHoldem:
         return players_with_chips
 
 
-def highcard_analysis(sorted_cards: [Card], count=5) -> [Card]:
-    return sorted_cards[:count]
+def highcard_analysis(reverse_cards: [Card], count=5) -> [Card]:
+    return reverse_cards[:count]
 
 
-def one_pair_analysis(sorted_cards: [Card]) -> [Card]:
-    return n_of_a_kind(sorted_cards, 2)
+def one_pair_analysis(reverse_cards: [Card]) -> [Card]:
+    return n_of_a_kind(reverse_cards, 2)
 
 
-def three_of_a_kind_analysis(sorted_cards: [Card]) -> [Card]:
-    return n_of_a_kind(sorted_cards, 3)
+def three_of_a_kind_analysis(reverse_cards: [Card]) -> [Card]:
+    return n_of_a_kind(reverse_cards, 3)
 
 
-def four_of_a_kind_analysis(sorted_cards: [Card]) -> [Card]:
-    return n_of_a_kind(sorted_cards, 4)
+def four_of_a_kind_analysis(reverse_cards: [Card]) -> [Card]:
+    return n_of_a_kind(reverse_cards, 4)
 
 
-def n_of_a_kind(sorted_cards, threshold):
+def straight_analysis(reverse_cards: [Card]) -> [Card]:
+    cards: [Card] = reverse_cards.copy()
+    if reverse_cards[0].number == 14:
+        cards.append(reverse_cards[0])
     current_streak: [Card] = []
-    for card in sorted_cards:
+    for card in cards:
+        if len(current_streak) is not 5:
+            if len(current_streak) == 0 or current_streak[len(current_streak) - 1].number < card.number:
+                current_streak = [card]
+            elif current_streak[len(current_streak) - 1].number > card.number:
+                current_streak.append(card)
+    if len(current_streak) is 5:
+        return current_streak
+    else:
+        return None
+
+
+def flush_analysis(reverse_cards: [Card]) -> [Card]:
+    suits = dict()
+    for card in reverse_cards:
+        suit_ary = []
+        if suits.__contains__(card.suit):
+            suit_ary = suits.get(card.suit)
+        suit_ary.append(card)
+        if len(suit_ary) is 5:
+            return suit_ary
+        suits[card.suit] = suit_ary
+    return None
+
+
+def n_of_a_kind(reverse_cards, threshold):
+    current_streak: [Card] = []
+    for card in reverse_cards:
         if len(current_streak) < threshold:
             if len(current_streak) is 0 or current_streak[0].number is card.number:
                 current_streak.append(card)
@@ -222,7 +265,7 @@ def n_of_a_kind(sorted_cards, threshold):
                 current_streak = [card]
         if len(current_streak) is threshold:
             # exclude the cards in the streak from the high cards
-            filtered = list(filter(lambda a: a.number != current_streak[0].number, sorted_cards))
+            filtered = list(filter(lambda a: a.number != current_streak[0].number, reverse_cards))
             tiebreakers = highcard_analysis(filtered, 5 - threshold)
             current_streak.extend(tiebreakers)
             return current_streak
@@ -234,6 +277,8 @@ def hand_analysis(hand: [Card], board: [Card]) -> [[Card]]:
     visible.extend(board)
     visible.sort(key=lambda it: (it.number + 13) % 14, reverse=True)
     analysis = [
+        straight_analysis(visible),
+        flush_analysis(visible),
         four_of_a_kind_analysis(visible),
         three_of_a_kind_analysis(visible),
         one_pair_analysis(visible),

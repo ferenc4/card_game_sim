@@ -1,11 +1,13 @@
-from cards.deck import Deck
+__author__ = "Ferenc Fazekas"
+
+from cards.deck import RandomDeck
 from games.texasholdem.texasholdem import TexasHoldem, BettingRound
 
 
 def distribution_check():
     counts = dict()
     for i in range(0, 100000):
-        deck = Deck()
+        deck = RandomDeck()
         for card_idx in range(0, 10):
             drawn = deck.draw()
             if counts.get(drawn):
