@@ -1,7 +1,10 @@
+from cards.deck import RandomDeck
+from games.texasholdem.interfaces.console import ConsoleInterface
+from games.texasholdem.interfaces.status import CardPositionIdentifier, CardNumberStatus
+
 __author__ = "Ferenc Fazekas"
 
-from cards.deck import RandomDeck
-from games.texasholdem.texasholdem import TexasHoldem, BettingRound
+from games.texasholdem.texasholdem import TexasHoldem
 
 
 def distribution_check():
@@ -23,20 +26,18 @@ def distribution_check():
 
 def main():
     players = 8
-    game = TexasHoldem(players)
+    game = TexasHoldem(ConsoleInterface(), players)
     game.deal_hands()
     game.flop()
     game.turn()
     game.river()
     game.print_status()
-    b1 = BettingRound(game.player_chips, 0, game.big_blind, game.players_with_chips())
-    b1.bet(20)
-    for i in range(0, players - 1):
-        b1.call_bet()
-    game.betting(b1)
+    game.conduct_betting_round()
     game.finalise()
     game.print_status()
 
 
 if __name__ == "__main__":
     main()
+    # status = CardNumberStatus(CardPositionIdentifier(1, 2), 14)
+    # print(status)

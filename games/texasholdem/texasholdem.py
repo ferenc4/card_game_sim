@@ -1,154 +1,94 @@
+from dataclasses import dataclass
+from typing import NamedTuple
+
+from cards.deck import Card, RandomDeck
+from games.texasholdem.betting import BettingRound
+from games.texasholdem.interfaces.status import GameStatus, ChipStatus, CheckedStatus, CardNumberStatus, CardSuitStatus, \
+    FoldedStatus, CardPositionIdentifier
+
 __author__ = "Ferenc Fazekas"
 
-from cards.deck import RandomDeck, Card
+
+class FrontEnd:
+    def wait_for_input(self, status: GameStatus):
+        raise NotImplementedError()
 
 
-class BettingRound:
-    def __init__(self, player_chips: [int], big_blind_index: int, big_blind_amount: int, players_in: [bool]) -> None:
-        self.player_chips = player_chips
-        self.big_blind_index = big_blind_index
-        self.big_blind_amount = big_blind_amount
-        self.current_bet_amount = big_blind_amount
-        self.current_player = big_blind_index - 1
-        self.players_in = players_in
-        self.bets = []
-        for is_player_in in players_in:
-            if is_player_in:
-                self.bets.append(0)
-            else:
-                self.bets.append(None)
+@dataclass
+class HandAnalysis:
+    weight: int
+    five_card_hand: [Card]
 
-    def get_next_player(self):
-        potential_next = self.current_player
-        found_next = False
-        while not found_next:
-            potential_next += 1
-            if potential_next == len(self.players_in):
-                potential_next = 0
-            if self.players_in[potential_next]:
-                return potential_next
 
-    def get_prev_player(self):
-        potential_prev = self.current_player
-        found_prev = False
-        while not found_prev:
-            potential_prev += 1
-            if potential_prev == len(self.players_in):
-                potential_prev = 0
-            if self.players_in[potential_prev]:
-                return potential_prev
-
-    def check(self):
-        self.current_player = self.get_next_player()
-
-    def bet(self, amount: int):
-        self.current_player = self.get_next_player()
-        self.player_chips[self.current_player] -= amount
-        self.bets[self.current_player] = amount
-
-    def fold(self):
-        self.current_player = self.get_next_player()
-        self.players_in[self.current_player] = False
-        print('{} folded.'.format(str(self.current_player)))
-
-    def call_bet(self):
-        self.current_player = self.get_next_player()
-        bet_to_match = max(self.bets)
-        additional = bet_to_match - self.bets[self.current_player]
-        allin_or_match = self.player_chips[self.current_player] if additional > self.player_chips[self.current_player] \
-            else additional
-        print('{} matching bet {} with {}'.format(str(self.current_player), str(bet_to_match),
-                                                  str(additional + self.bets[self.current_player])))
-        self.player_chips[self.current_player] -= allin_or_match
-        self.bets[self.current_player] += allin_or_match
-
-    def raise_bet(self, amount):
-        bet_to_raise_on = max(self.bets)
-        if amount < bet_to_raise_on:
-            raise Exception("Invalid raise, because amount <{}> is less than a previous bet <{}>.".format(
-                amount,
-                bet_to_raise_on
-            ))
-        self.current_player = self.get_next_player()
-        actual_raise = amount - self.bets[self.current_player]
-        print('{0} raising to {1}'.format(str(self.current_player), str(actual_raise)))
-        if actual_raise <= 0:
-            raise Exception("Invalid raise amount <{}> for previous bet <{}>.".format(amount,
-                                                                                      self.bets[self.current_player]))
-        self.player_chips[self.current_player] -= actual_raise
-        self.bets[self.current_player] = actual_raise
-
-    def is_finished(self) -> bool:
-        return self.is_one_player_standing() and self.do_unmatched_bets_exist()
-
-    def is_one_player_standing(self):
-        found_player_standing = False
-        for is_player_in in self.players_in:
-            if is_player_in:
-                if found_player_standing:
-                    # Found 2 players are still playing
-                    return False
-                found_player_standing = True
-        return True
-
-    def print_all(self):
-        for i in range(0, len(self.player_chips)):
-            print(str(self.player_chips[i]) + " " + ("I" if self.players_in[i] else "O"), " ")
-        print()
-        for bet in self.bets:
-            print(bet, " ")
-        print()
-
-    def do_unmatched_bets_exist(self) -> bool:
-        return True
-
-    def get_pot(self):
-        pot: int = 0
-        for bet in self.bets:
-            pot += bet
-        return pot
+@dataclass
+class WinnersDetails:
+    winners: [int]
+    analyses: [HandAnalysis]
 
 
 class TexasHoldem:
-    def __init__(self, player_count: int, starter_chips=100, chip_to_blind_ratio=50, deck=RandomDeck()) -> None:
-        self.players = [None] * player_count
-        self.shared = [None] * 5
-        self.deck = deck
-        self.pot_size = 0
-        self.player_chips = [starter_chips] * player_count
-        self.chip_to_blind_ratio = chip_to_blind_ratio
-        self.betting_rounds = []
-        self.big_blind = starter_chips / chip_to_blind_ratio
+    def __init__(self,
+                 front_end: FrontEnd,
+                 player_count: int,
+                 starter_chips=100,
+                 chip_to_blind_ratio=50,
+                 deck=RandomDeck()) -> None:
+        self.player_hands: [Card] = [None] * player_count
+        self.shared: [Card] = [None] * 5
+        self.deck: [Card] = deck
+        self.pot_size: int = 0
+        self.player_chips: [int] = [starter_chips] * player_count
+        self.chip_to_blind_ratio: int = chip_to_blind_ratio
+        self.betting_rounds: [BettingRound] = []
+        self.big_blind_amount = int(starter_chips / chip_to_blind_ratio)
+        self.current_big_blind = 0
+        self.front_end = front_end
 
-    def deal_hands(self):
-        for i in range(0, self.players.__len__()):
-            self.players[i] = [self.deck.draw(), self.deck.draw()]
+    def deal_hands(self) -> None:
+        for i in range(0, self.player_hands.__len__()):
+            self.player_hands[i] = [self.deck.draw(), self.deck.draw()]
 
-    def reveal(self, index):
+    def reveal(self, index: int) -> None:
         self.shared[index] = self.deck.draw()
 
-    def flop(self):
+    def flop(self) -> None:
         for i in range(0, 3):
             self.reveal(i)
 
-    def turn(self):
+    def turn(self) -> None:
         self.reveal(3)
 
-    def river(self):
+    def river(self) -> None:
         self.reveal(4)
 
-    def betting(self, round: BettingRound):
-        self.betting_rounds.append(round)
+    def conduct_betting_round(self):
+        players_in = self.players_with_chips() if len(self.betting_rounds) is 0 else self.betting_rounds[-1].players_in
+        cur_round = BettingRound(self.player_chips, self.current_big_blind, self.big_blind_amount, players_in)
+        for player_i, is_player_in in enumerate(players_in):
+            if is_player_in:
+                status = self.status_for(player_i, cur_round)
+                input_desc = self.front_end.wait_for_input(status)
+                cur_round.process_input_descriptor(input_desc)
+        self.betting_rounds.append(cur_round)
 
     def players_in(self):
         return self.betting_rounds[len(self.betting_rounds) - 1].players_in
 
     def finalise(self):
+        winners_details = self.allocate_winner()
+        self.pot_size = 0
+        for betting_round in self.betting_rounds:
+            self.pot_size += betting_round.get_pot()
+        self.allocate_pot(winners_details.analyses, winners_details.winners)
+        self.betting_rounds = []
+        self.rotate_big_blind()
+
+    def allocate_winner(self) -> WinnersDetails:
         best_analyses = []
         winners: [int] = []
-        for index, current_player in enumerate(self.players):
+        for index, current_player in enumerate(self.player_hands):
             if self.players_in()[index]:
-                new_analysis = hand_analysis(current_player, self.shared)
+                new_analysis: HandAnalysis = get_best_hand(current_player, self.shared)
                 if len(best_analyses) > 0:
                     # todo compare to all current best analyses to see if one is worse than the rest
                     comparison = compare_hands(best_analyses[0], new_analysis)
@@ -160,40 +100,67 @@ class TexasHoldem:
                         best_analyses.append(new_analysis)
                 else:
                     best_analyses.append(new_analysis)
-        self.pot_size = 0
-        for betting_round in self.betting_rounds:
-            self.pot_size += betting_round.get_pot()
+        return WinnersDetails(winners, best_analyses)
+
+    def allocate_pot(self, best_analyses, winners):
         print("Winners are:")
         analysis_i = 0
         for winner in winners:
             full_hand = best_analyses[analysis_i]
-            starting_hand = self.players[winner]
+            starting_hand = self.player_hands[winner]
             print("Player {} won. SH: {} FH: {}".format(winner + 1, starting_hand, full_hand))
             self.player_chips[winner] += self.pot_size / len(winners)
             analysis_i += 1
-        self.betting_rounds = []
 
-    def features(self):
-        pass
+    def rotate_big_blind(self):
+        proposed_big_blind = (self.current_big_blind + 1) % len(self.player_hands)
+        players_in = self.players_with_chips()
+        while proposed_big_blind not in players_in:
+            proposed_big_blind = (proposed_big_blind + 1) % len(self.player_hands)
+        self.current_big_blind = proposed_big_blind
+
+    def status_for(self, player_index: int, betting_round: BettingRound):
+        checked_statuses = None
+        folded_statuses = None
+        suit_statuses = None
+        number_statuses = None
+        chip_statuses: [ChipStatus] = [ChipStatus(i, v) for i, v in enumerate(self.player_chips)]
+        checked_statuses: [CheckedStatus] = betting_round.checked
+        folded_statuses: [FoldedStatus] = betting_round.folded
+        if self.player_hands:
+            suit_statuses = []
+            number_statuses = []
+            for player_i, hand in enumerate(self.player_hands):
+                for card_i, card in enumerate(hand):
+                    cpi = CardPositionIdentifier(player_i, card_i)
+                    suit_statuses.append(CardSuitStatus(cpi, card.suit))
+                    number_statuses.append(CardSuitStatus(cpi, card.number))
+        return GameStatus(player_index,
+                          chip_statuses,
+                          checked_statuses,
+                          folded_statuses,
+                          suit_statuses,
+                          number_statuses)
         # to track:
         # p{playerIndex}IsPlaying: Bool
-        # p{playerIndex}IsPlaying: Bool
+        # p{playerIndex}Chips: Bool
         # t[PreFlop, Flop, Turn, River]P{playerIndex}Checked: Bool
-        # t[PreFlop, Flop, Turn, River]P{playerIndex}[Bet, Call, Raise, Re-raise]Amount: int
+        # t[PreFlop, Flop, Turn, River]P{playerIndex}Folded: Bool
+        # t[PreFlop, Flop, Turn, River]P{playerIndex}[Bet, Call, Raise]Amount: int
         # cardIndex 1-5 + 8(1-2) Other players are none until reveal
         # p{playerIndex}Card{cardIndex}Suit: Enum
         # p{playerIndex}Card{cardIndex}Number: Enum
 
     def print_status(self):
         print("\n")
-        for i in range(0, self.players.__len__()):
-            current_player = self.players[i]
+        for i in range(0, self.player_hands.__len__()):
+            current_player = self.player_hands[i]
             chips = self.player_chips[i]
             print("Player {}: {:>4} {:>4} ${} ({} BB)".format(i + 1,
                                                               str(current_player[0]),
                                                               str(current_player[1]),
                                                               str(chips),
-                                                              str(chips / self.big_blind)))
+                                                              str(chips / self.big_blind_amount)))
         print("Board: ", end="")
         for i in range(0, self.shared.__len__()):
             if self.shared[i]:
@@ -202,9 +169,12 @@ class TexasHoldem:
         print("\n")
 
     def players_with_chips(self):
-        players_with_chips = []
-        for player in self.player_chips:
-            players_with_chips.append(player > 0)
+        players_with_chips: [bool] = []
+        for chips in self.player_chips:
+            if chips > 0:
+                players_with_chips.append(True)
+            else:
+                players_with_chips.append(False)
         return players_with_chips
 
 
@@ -271,40 +241,39 @@ def n_of_a_kind(reverse_cards, threshold):
     return None
 
 
-def hand_analysis(hand: [Card], board: [Card]) -> [[Card]]:
+def get_best_hand(hand: [Card], board: [Card]) -> HandAnalysis:
     visible = list(hand)
     visible.extend(board)
     visible.sort(key=lambda it: (it.number + 13) % 14, reverse=True)
-    analysis = [
-        straight_analysis(visible),
-        flush_analysis(visible),
-        four_of_a_kind_analysis(visible),
-        three_of_a_kind_analysis(visible),
-        one_pair_analysis(visible),
-        highcard_analysis(visible)
+    analysis_functs = [
+        straight_analysis,
+        flush_analysis,
+        four_of_a_kind_analysis,
+        three_of_a_kind_analysis,
+        one_pair_analysis,
+        highcard_analysis
     ]
-    return analysis
+    for index, analysis_funct in enumerate(analysis_functs):
+        result: [Card] = analysis_funct(visible)
+        if result is not None:
+            return HandAnalysis(len(analysis_functs) - index, result)
+    raise ValueError("Hand analysis failed. High card hand should always apply.")
 
 
 # assumes hands are sorted in reverse order of winning (high to low)
-def compare_hands(analysis1: [[Card]], analysis2: [[Card]]):
-    len1 = len(analysis1)
-    len2 = len(analysis2)
-    if len1 is not len2:
-        raise Exception("Cannot compare analyses with different lengths <{}> and <{}>.".format(len1, len2))
-    for i in range(0, len1):
-        hand1 = analysis1[i]
-        hand2 = analysis2[i]
-        if hand1 and hand2:
-            for card_index in range(0, len(hand1)):
-                card1 = hand1[card_index]
-                card2 = hand2[card_index]
-                if card1.number > card2.number:
-                    return -1
-                elif card1.number < card2.number:
-                    return 1
-        elif hand1:
+def compare_hands(analysis1: HandAnalysis, analysis2: HandAnalysis) -> int:
+    if analysis1.weight > analysis2.weight:
+        return -1
+    if analysis1.weight < analysis2.weight:
+        return 1
+    if len(analysis1.five_card_hand) is not len(analysis2.five_card_hand):
+        raise ValueError("Expected hand sizes to match, but they were of size {} and {}."
+                         .format(analysis1.five_card_hand, analysis2.five_card_hand))
+    for card_index in range(0, len(analysis1.five_card_hand)):
+        card1 = analysis1.five_card_hand[card_index]
+        card2 = analysis2.five_card_hand[card_index]
+        if card1.number > card2.number:
             return -1
-        elif hand2:
+        elif card1.number < card2.number:
             return 1
     return 0
